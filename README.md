@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Make a cool ass clock that can display temperature, humidity and time.
+Make a cool little clock that can display temperature, humidity and time.
 Additionally, it would be great to be as efficient as possible, but that's not
 a now problem.
 
