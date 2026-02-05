@@ -22,7 +22,6 @@
 #include "display.h"
 #include "i2c.h"
 #include "sht45.h"
-#include "util.h"
 
 static i2c_device_config_t display_1_conf = {
     .device_address = 0x71,
@@ -35,7 +34,7 @@ static disp_t display_1 = {
             .blink_speed = DISPLAY_BLINK_STATIC,
             .en_display = true,
             .en_oscillator = true,
-            .brightness = 0xF,
+            .brightness = 0x7,
         },
     .update_time_ms = 250,
     .update_config = true,
@@ -52,7 +51,7 @@ static disp_t display_2 = {
             .blink_speed = DISPLAY_BLINK_STATIC,
             .en_display = true,
             .en_oscillator = true,
-            .brightness = 0xF,
+            .brightness = 0x7,
         },
     .update_time_ms = 250,
     .update_config = true,
