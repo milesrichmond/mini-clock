@@ -24,6 +24,12 @@
 
 #define I2C_STD_TIMEOUT (1000)
 
+/*
+ *
+ * Initializes the i2c port that this project uses.
+ * GPIO22 as SDA, GPIO20 as SCL.
+ *
+ */
 i2c_master_bus_handle_t init_i2c();
 
 i2c_master_dev_handle_t init_i2c_dev(uint8_t bus,
