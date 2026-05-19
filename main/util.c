@@ -98,3 +98,24 @@ font_char_t char_to_font(char c) {
     return FONT_CHAR_INVALID;
   }
 }
+
+float rolling_average_get(rolling_average_t *avg) {
+  float sum = 0.0f;
+
+  for (size_t sample = 0; sample < avg->sample_count; sample++)
+    sum += avg->samples[sample];
+
+  return sum / avg->sample_count;
+}
+
+void rolling_average_update(rolling_average_t *avg, float new_sample) {
+  avg->samples[avg->head_position++] = new_sample;
+
+  if (avg->head_position == sizeof(avg->samples))
+    avg->head_position = 0;
+
+  if (avg->sample_count < sizeof(avg->samples))
+    avg->sample_count++;
+
+  avg->average = rolling_average_get(avg);
+}

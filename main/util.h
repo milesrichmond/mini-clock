@@ -50,4 +50,13 @@ typedef enum font_char_t {
   FONT_CHAR_INVALID = 0x49,
 } font_char_t;
 
+typedef struct {
+  float average;
+  float samples[64];
+  size_t sample_count;
+  size_t head_position;
+} rolling_average_t;
+
 font_char_t char_to_font(char c);
+
+void rolling_average_update(rolling_average_t *avg, float new_sample);
