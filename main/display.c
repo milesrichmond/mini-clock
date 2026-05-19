@@ -19,7 +19,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <string.h>
 
 #include <driver/i2c_master.h>

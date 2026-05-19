@@ -52,7 +52,7 @@ typedef enum font_char_t {
 
 typedef struct {
   float average;
-  float samples[64];
+  float samples[60];
   size_t sample_count;
   size_t head_position;
 } rolling_average_t;

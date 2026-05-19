@@ -15,6 +15,7 @@
 //
 
 #include "util.h"
+#include <stdio.h>
 #include <string.h>
 
 font_char_t char_to_font(char c) {
@@ -109,12 +110,18 @@ float rolling_average_get(rolling_average_t *avg) {
 }
 
 void rolling_average_update(rolling_average_t *avg, float new_sample) {
-  avg->samples[avg->head_position++] = new_sample;
+  // Strange syntax magic
+  static const size_t array_size =
+      sizeof((rolling_average_t){}.samples) / sizeof(float);
 
-  if (avg->head_position == sizeof(avg->samples))
+  avg->samples[avg->head_position] = new_sample;
+
+  if (avg->head_position >= array_size - 1)
     avg->head_position = 0;
+  else
+    avg->head_position++;
 
-  if (avg->sample_count < sizeof(avg->samples))
+  if (avg->sample_count < array_size)
     avg->sample_count++;
 
   avg->average = rolling_average_get(avg);
