@@ -49,7 +49,7 @@ static display_t display_1 = {
             .en_display = true,
             .en_oscillator = true,
             .brightness = 0x4,
-            .update_time_ms = 1000,
+            .update_time_ms = 5000,
         },
     .animation =
         {
@@ -65,7 +65,7 @@ static display_t display_2 = {
             .en_display = true,
             .en_oscillator = true,
             .brightness = 0x4,
-            .update_time_ms = 1000,
+            .update_time_ms = 5000,
         },
     .animation =
         {
@@ -78,7 +78,7 @@ static sht45_t sht45 = {
     .config =
         {
             .fahrenheit = true,
-            .update_time_ms = 1000,
+            .update_time_ms = 2500,
         },
     .rh = 0,
     .temp = 0,
