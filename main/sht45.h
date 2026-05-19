@@ -24,15 +24,20 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
+#define SHT_NOTIFY_UPDATE (0x1)
+
 typedef struct {
   TaskHandle_t task;
+  TaskHandle_t parent_task;
   i2c_master_dev_handle_t i2c_handle;
+
   struct {
     uint16_t update_time_ms;
     bool fahrenheit;
   } config;
+
   float temp;
   float rh;
 } sht45_t;
 
-void sht45_init(uint8_t bus, sht45_t *const sht45);
+void sht45_init(sht45_t *sht45);

@@ -1,121 +1,120 @@
-//
-// Copyright 2026 Miles Richmond
-//
-//   Licensed under the Apache License, Version 2.0 (the "License");
-//   you may not use this file except in compliance with the License.
-//   You may obtain a copy of the License at
-//
-//       http://www.apache.org/licenses/LICENSE-2.0
-//
-//   Unless required by applicable law or agreed to in writing, software
-//   distributed under the License is distributed on an "AS IS" BASIS,
-//   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//   See the License for the specific language governing permissions and
-//   limitations under the License.
-//
-
 #include "display.h"
-
-#include <string.h>
-
-#include <esp_system.h>
-
-#include "i2c.h"
 #include "util.h"
 
-typedef struct {
-  bool en_colon : 1;
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 
-  /* an extra 4 characters for '.' */
-  char chars[8];
-} display_memory_t;
+#include <driver/i2c_master.h>
+#include <driver/i2c_types.h>
+#include <esp_err.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
-void convert_to_raw(const display_memory_t *data, uint16_t raw[5],
-                    uint8_t *frame);
+// DEFINES
+
+#define TIMEOUT (1000)
+
+// PROTOTYPES
+
+esp_err_t update_config(const display_t *display);
+
+esp_err_t update_animation(display_t *display);
+
+// IMPLEMENTATION
 
 void display_task(void *parameters) {
-  disp_t *const display = (disp_t *)parameters;
-  TickType_t lastWakeTime = xTaskGetTickCount();
-  uint8_t animation_frame = 0;
+  BaseType_t gotNotification;
+  uint32_t notify = 0;
+  display_t *const display = (display_t *)parameters;
 
-  display_memory_t disp_mem;
-  memset(&disp_mem, 0, sizeof(display_memory_t));
-  uint8_t write_buffer[17];
-  memset(write_buffer, 0, sizeof(write_buffer));
+  ESP_ERROR_CHECK(update_config(display));
 
-  /* Running Loop */
   for (;;) {
-    /* Update config */
-    if (display->update_config) {
-      display->update_config = false;
+    gotNotification = xTaskNotifyWait(pdFALSE, ULONG_MAX, &notify,
+                                      display->config.update_time_ms);
 
-      write_buffer[0] = 0x20 | display->config.en_oscillator;
-      ESP_ERROR_CHECK(i2c_master_transmit(display->i2c_device, write_buffer, 1,
-                                          I2C_STD_TIMEOUT));
+    if (gotNotification == pdTRUE) {
+      // Update for new display config
+      if (notify & DISPLAY_NOTIFY_CONFIG)
+        ESP_ERROR_CHECK(update_config(display));
 
-      write_buffer[0] = 0x80 | ((display->config.blink_speed << 1) |
-                                display->config.en_display);
-      ESP_ERROR_CHECK(i2c_master_transmit(display->i2c_device, write_buffer, 1,
-                                          I2C_STD_TIMEOUT));
-
-      write_buffer[0] = 0xE0 | display->config.brightness;
-      ESP_ERROR_CHECK(i2c_master_transmit(display->i2c_device, write_buffer, 1,
-                                          I2C_STD_TIMEOUT));
+      // Update for new display animation
+      if (notify & DISPLAY_NOTIFY_ANIMATION) {
+        display->animation.frame = 0;
+        update_animation(display);
+      }
+    } else {
+      // No notifications in update period.
+      // Update if dynamic animation
+      if (!display->animation.is_static)
+        update_animation(display);
     }
-
-    if (display->reset_animation ||
-        animation_frame > display->animation.length - 4) {
-      animation_frame = 0;
-      display->reset_animation = false;
-    }
-    memcpy(disp_mem.chars, display->animation.str + animation_frame++, 8);
-
-    /* Animate/Display Characters */
-    write_buffer[0] = 0x00;
-    convert_to_raw(&disp_mem, (uint16_t *)&write_buffer[1], &animation_frame);
-    ESP_ERROR_CHECK(i2c_master_transmit(display->i2c_device, write_buffer,
-                                        sizeof(write_buffer), I2C_STD_TIMEOUT));
-
-    vTaskDelayUntil(&lastWakeTime, pdMS_TO_TICKS(display->update_time_ms));
   }
 
   vTaskDelete(NULL);
 }
 
-void disp_init(disp_t *const display) {
-  if (pdFAIL == xTaskCreate(display_task, "Display Task", 4096, (void *)display,
+void display_init(display_t *display) {
+  if (pdFAIL == xTaskCreate(display_task, "display Task", 4096, (void *)display,
                             1, &display->task))
     esp_system_abort("Failed to create display task!\n");
 }
 
-void convert_to_raw(const display_memory_t *data, uint16_t raw[5],
-                    uint8_t *frame) {
-  uint8_t index = 0, chars = 0;
+esp_err_t update_config(const display_t *display) {
+  esp_err_t error;
+  uint8_t write_buf;
 
-  while (chars < 5 && index < 8) {
+  write_buf = 0x20 | display->config.en_oscillator;
+  error = i2c_master_transmit(display->i2c_handle, &write_buf, 1, TIMEOUT);
+  if (error != ESP_OK)
+    return error;
+
+  write_buf =
+      0x80 | ((display->config.blink_speed << 1) | display->config.en_display);
+  error = i2c_master_transmit(display->i2c_handle, &write_buf, 1, TIMEOUT);
+  if (error != ESP_OK)
+    return error;
+
+  write_buf = 0xE0 | display->config.brightness;
+  error = i2c_master_transmit(display->i2c_handle, &write_buf, 1, TIMEOUT);
+  return error;
+}
+
+esp_err_t update_animation(display_t *display) {
+  display_animation_t *const animation = &display->animation; // Convenience
+  uint8_t write_buf_bytes[18] = {0};
+  // the display uses 16 bit characters, so this is used to stride correctly
+  uint16_t *write_buf = (uint16_t *)&write_buf_bytes[1];
+  uint8_t chars = 0;
+  uint8_t str_idx = animation->frame;
+
+  // Reset animation (1 frame empty)
+  if (animation->frame > strlen(animation->data)) {
+    animation->frame = 0;
+    str_idx = 0;
+  }
+
+  while (chars < 5 && str_idx < animation->frame + 8 &&
+         str_idx < strlen(animation->data)) {
     if (chars == 2)
       chars++;
 
-    if (chars == 0 && data->chars[index] == '.') {
-      index++;
-      (*frame)++;
+    if (chars == 0 && animation->data[str_idx] == '.') {
+      str_idx++;
     }
 
-    raw[chars] = char_to_font(data->chars[index]);
-    index++;
-    if (data->chars[index] == '.') {
-      raw[chars] |= char_to_font('.');
-      index++;
+    write_buf[chars] = char_to_font(animation->data[str_idx]);
+    str_idx++;
+    if (animation->data[str_idx] == '.') {
+      write_buf[chars] |= FONT_CHAR_DECIMAL;
+      str_idx++;
     }
 
     chars++;
   }
 
-  /*
-  raw[0] = char_to_font(data->chars[0]) | data->en_decimal_0;
-  raw[1] = char_to_font(data->chars[1]) | data->en_decimal_1;
-  raw[2] = (data->en_colon) ? 0xFFFF : 0x0000;
-  raw[3] = char_to_font(data->chars[2]) | data->en_decimal_2;
-  raw[4] = char_to_font(data->chars[3]) | data->en_decimal_3;
-  */
+  return i2c_master_transmit(display->i2c_handle, ((uint8_t *)write_buf_bytes),
+                             17, TIMEOUT);
 }
