@@ -1,11 +1,18 @@
 #![no_std]
 #![no_main]
+#![feature(generic_const_exprs)]
 
-use esp_hal::clock::CpuClock;
-use esp_hal::main;
-use esp_hal::peripherals::Peripherals;
-use esp_hal::time::{Duration, Instant};
+use core::cell::RefCell;
+
+use embedded_hal_bus::i2c::RefCellDevice;
+use esp_hal::{
+    clock::CpuClock,
+    main,
+    peripherals::Peripherals,
+    time::{Duration, Instant, Rate},
+};
 use log::{error, info};
+use mini_clock::sht45::{SHT45, TRHHigh};
 
 #[panic_handler]
 fn panic(panic_info: &core::panic::PanicInfo) -> ! {
@@ -37,8 +44,22 @@ fn main() -> ! {
     let _gpio16 = peripherals.GPIO16;
     let _gpio17 = peripherals.GPIO17;
 
+    // I2C config
+    let i2c_bus = esp_hal::i2c::master::I2c::new(
+        peripherals.I2C0,
+        esp_hal::i2c::master::Config::default().with_frequency(Rate::from_khz(100)),
+    )
+    .unwrap()
+    .with_scl(peripherals.GPIO20)
+    .with_sda(peripherals.GPIO22);
+    let i2c_cell = RefCell::new(i2c_bus);
+
+    // I2C devices
+    let mut sht45 = SHT45::new(RefCellDevice::new(&i2c_cell), 0x44);
+
+    // Application Loop
     loop {
-        info!("Hello world!");
+        info!("{:?}", sht45.read_data::<TRHHigh>());
         let delay_start = Instant::now();
         while delay_start.elapsed() < Duration::from_millis(500) {}
     }
