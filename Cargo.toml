@@ -5,7 +5,7 @@ version = "0.1.0"
 
 [[bin]]
 name = "mini_clock"
-path = "./src/bin/main.rs"
+path = "./src/main.rs"
 
 [dependencies]
 esp-hal = { version = "~1.2.2", features = ["esp32", "log-04"] }
@@ -15,6 +15,7 @@ embedded-hal-bus = "0.3.0"
 log = "0.4.27"
 esp-println = { version = "0.18.0", features = ["esp32", "log-04"] }
 critical-section = "1.2.0"
+fixedstr = { version = "0.5.11", default-features = false, features = ["no-alloc"] }
 
 [profile.dev]
 opt-level = "s"

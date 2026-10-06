@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+#![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
 
 use core::cell::RefCell;
@@ -11,8 +12,12 @@ use esp_hal::{
     peripherals::Peripherals,
     time::{Duration, Instant, Rate},
 };
+use fixedstr::{str_format, str8};
 use log::{error, info};
-use mini_clock::sht45::{SHT45, TRHHigh};
+use mini_clock::{
+    ht16k33::{Config, HT16K33},
+    sht45::{SHT45, commands::TRHHigh},
+};
 
 #[panic_handler]
 fn panic(panic_info: &core::panic::PanicInfo) -> ! {
@@ -57,9 +62,25 @@ fn main() -> ! {
     // I2C devices
     let mut sht45 = SHT45::new(RefCellDevice::new(&i2c_cell), 0x44);
 
+    let mut display_1 = HT16K33::new(RefCellDevice::new(&i2c_cell), 0x70);
+    display_1.config = Config {
+        en_display: true,
+        en_oscillator: true,
+        brightness: 0x8,
+        display_blink: mini_clock::ht16k33::BlinkConfig::Static,
+        en_colon: false,
+    };
+    if let Err(err) = display_1.update_config() {
+        info!("{}", err);
+    }
+
     // Application Loop
     loop {
-        info!("{:?}", sht45.read_data::<TRHHigh>());
+        let data = sht45.read_data::<TRHHigh>();
+        info!("data: {}", data.unwrap_or_default());
+        let msg = str_format!(str8, "{:4.2}", data.unwrap().temperature);
+        let _ = display_1.write_contents(&msg);
+
         let delay_start = Instant::now();
         while delay_start.elapsed() < Duration::from_millis(500) {}
     }
